@@ -37,7 +37,7 @@ type Backoff struct {
 	NoJitter bool
 
 	tries uint
-	lock  *sync.Mutex // lock guards tries
+	lock  sync.Mutex // lock guards tries
 }
 
 func (b *Backoff) setup() {
@@ -47,10 +47,6 @@ func (b *Backoff) setup() {
 
 	if b.MaxDuration == 0 {
 		b.MaxDuration = DefaultMaxDuration
-	}
-
-	if b.lock == nil {
-		b.lock = new(sync.Mutex)
 	}
 }
 
