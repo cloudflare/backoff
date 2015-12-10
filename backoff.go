@@ -6,7 +6,6 @@
 package backoff
 
 import (
-	"math"
 	mrand "math/rand"
 	"sync"
 	"time"
@@ -37,7 +36,7 @@ type Backoff struct {
 	// jitter will be introduced.
 	NoJitter bool
 
-	tries int
+	tries uint
 	lock  *sync.Mutex // lock guards tries
 }
 
@@ -62,18 +61,15 @@ func (b *Backoff) Duration() time.Duration {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	pow := 1 << uint(b.tries)
+	pow := 1 << b.tries
+	t := time.Duration(pow)
+	t = b.Interval * t
 
-	// MaxInt16 is an arbitrary choice on an upper bound; the
-	// implication is that every 16 tries, the counter resets.
-	if pow > math.MaxInt16 {
-		b.tries = 0
-		pow = 1
+	// Increment tries only if no overflow occurs
+	if pow < (pow<<1) && t < b.Interval*time.Duration(pow<<1) {
+		b.tries++
 	}
 
-	t := time.Duration(pow)
-	b.tries++
-	t = b.Interval * t
 	if t > b.MaxDuration {
 		t = b.MaxDuration
 	}
@@ -83,4 +79,14 @@ func (b *Backoff) Duration() time.Duration {
 	}
 
 	return t
+}
+
+// Reset resets the attempt counter of a backoff.
+//
+// It should be called when the rate-limited action succeeds.
+func (b *Backoff) Reset() {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.tries = 0
 }
