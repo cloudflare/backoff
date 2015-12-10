@@ -1,4 +1,4 @@
-package core
+package backoff
 
 import (
 	"crypto/rand"
