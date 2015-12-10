@@ -26,7 +26,7 @@ func retryable() {
         for {
                 err := someOperation()
                 if err == nil {
-		                break;
+                    break
                 }
 
                 log.Printf("error in someOperation: %v", err)
