@@ -9,12 +9,14 @@ to backoff will return an a `time.Duration` that is *2 <sup>n</sup> *
 interval*. If jitter is enabled (which is the default behaviour), the
 duration is a random value between 0 and *2 <sup>n</sup> * interval*.
 The backoff is configured with a maximum duration that will not be
-exceed; e.g., by default, the longest duration returned is
+exceeded; e.g., by default, the longest duration returned is
 `backoff.DefaultMaxDuration`.
 
 ## Usage
 
-A `Backoff` needs no initialisation to use the default behaviour:
+A `Backoff` is initialised with a call to `New`. Using zero values
+causes it to use `DefaultMaxDuration` and `DefaultInterval` as the
+maximum duration and interval.
 
 ```
 package something
@@ -22,7 +24,7 @@ package something
 import "github.com/cloudflare/backoff"
 
 func retryable() {
-        b := &backoff.Backoff{}
+        b := backoff.New(0, 0)
         for {
                 err := someOperation()
                 if err == nil {
@@ -31,18 +33,16 @@ func retryable() {
 
                 log.Printf("error in someOperation: %v", err)
                 <-time.After(b.Duration())
-        }
+		}
+
+        log.Printf("succeeded after %d tries", b.Tries()+1)
+        b.Reset()
 }
 ```
 
 ## Tunables
 
-A `Backoff` has three fields that control its behaviour that may be
-set when the `struct` is initialised:
-
-* `MaxDuration` is the longest duration returned.
-* `Interval` is the backoff's interval.
-* `NoJitter`, if true, will not use jitter for the backoff.
+* `NewWithoutJitter` creates a Backoff that doesn't use jitter.
 
 The default behaviour is controlled by two variables:
 
