@@ -12,14 +12,14 @@
 //
 // The `New` function will attempt to use the system's cryptographic
 // random number generator to seed a Go math/rand random number
-// source. If this fails, it will fall back to using the Unix
-// timestamp as the seed.
+// source. If this fails, the package will panic on startup.
 package backoff
 
 import (
 	"crypto/rand"
 	"encoding/binary"
 	"io"
+	"math"
 	mrand "math/rand"
 	"sync"
 	"time"
@@ -52,19 +52,29 @@ type Backoff struct {
 	// jitter will be introduced.
 	noJitter bool
 
-	tries, n uint64
-	lock     sync.Mutex // lock guards tries
-	rng      *mrand.Rand
+	// decay controls the decay of n. If it is non-zero, n is
+	// reset if more than the last backoff + decay has elapsed since
+	// the last try.
+	decay time.Duration
+
+	n       uint64
+	lastTry time.Time
+	lock    sync.Mutex // lock guards n
 }
 
 // New creates a new backoff with the specified max duration and
 // interval. Zero values may be used to use the default values.
+//
+// Panics if either max or interval is negative.
 func New(max time.Duration, interval time.Duration) *Backoff {
+	if max < 0 || interval < 0 {
+		panic("backoff: max or interval is negative")
+	}
+
 	b := &Backoff{
 		maxDuration: max,
 		interval:    interval,
 	}
-
 	b.setup()
 	return b
 }
@@ -109,17 +119,12 @@ func (b *Backoff) Duration() time.Duration {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.tries++
-	pow := uint64(1 << b.n)
-	t := time.Duration(pow)
-	t = b.interval * t
-	// Increment n only if no overflow occurs
-	if pow < (pow<<1) && t < b.interval*time.Duration(pow<<1) {
-		b.n++
-	}
+	b.decayN()
 
-	if t > b.maxDuration {
-		t = b.maxDuration
+	t, overflow := b.duration(b.n)
+
+	if !overflow {
+		b.n++
 	}
 
 	if !b.noJitter {
@@ -129,6 +134,23 @@ func (b *Backoff) Duration() time.Duration {
 	return t
 }
 
+// requires b to be locked.
+func (b *Backoff) duration(n uint64) (t time.Duration, overflow bool) {
+	// Saturate pow
+	pow := time.Duration(math.MaxInt64)
+	if n < 63 {
+		pow = 1 << n
+	}
+
+	t = b.interval * pow
+	if t/pow != b.interval || t > b.maxDuration {
+		t = b.maxDuration
+		overflow = true
+	}
+
+	return
+}
+
 // Reset resets the attempt counter of a backoff.
 //
 // It should be called when the rate-limited action succeeds.
@@ -136,13 +158,43 @@ func (b *Backoff) Reset() {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.tries = 0
+	b.lastTry = time.Time{}
 	b.n = 0
 }
 
-// Tries returns the current number of attempts that have been made.
-func (b *Backoff) Tries() uint64 {
+// SetDecay sets the duration after which the try counter will be reset.
+// Panics if decay is smaller than 0.
+//
+// The decay only kicks in if at least the last backoff + decay has elapsed
+// since the last try.
+func (b *Backoff) SetDecay(decay time.Duration) {
+	if decay < 0 {
+		panic("backoff: decay < 0")
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
-	return b.tries
+	b.decay = decay
+}
+
+// requires b to be locked
+func (b *Backoff) decayN() {
+	if b.decay == 0 {
+		return
+	}
+
+	if b.lastTry.IsZero() {
+		b.lastTry = time.Now()
+		return
+	}
+
+	lastDuration, _ := b.duration(b.n - 1)
+	decayed := time.Since(b.lastTry) > lastDuration+b.decay
+	b.lastTry = time.Now()
+
+	if !decayed {
+		return
+	}
+
+	b.n = 0
 }

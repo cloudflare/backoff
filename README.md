@@ -33,10 +33,40 @@ func retryable() {
 
                 log.Printf("error in someOperation: %v", err)
                 <-time.After(b.Duration())
-		}
+        }
 
         log.Printf("succeeded after %d tries", b.Tries()+1)
         b.Reset()
+}
+```
+
+It can also be used to rate limit code that should retry infinitely, but which does not
+use `Backoff` itself.
+
+```
+package something
+
+import (
+    "time"
+
+    "github.com/cloudflare/backoff"
+)
+
+func retryable() {
+        b := backoff.New(0, 0)
+        b.SetDecay(30 * time.Second)
+
+        for {
+                // b will reset if someOperation returns later than
+                // the last call to b.Duration() + 30s.
+                err := someOperation()
+                if err == nil {
+                    break
+                }
+
+                log.Printf("error in someOperation: %v", err)
+                <-time.After(b.Duration())
+        }
 }
 ```
 
