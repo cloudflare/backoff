@@ -1,6 +1,7 @@
 package backoff
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -26,10 +27,6 @@ func TestDefaults(t *testing.T) {
 		t.Fatal("backoff should have been initialised without jitter")
 	}
 
-	if b.rng != nil {
-		t.Fatal("RNG should not have been initialised yet")
-	}
-
 	dur := b.Duration()
 	if dur != DefaultInterval {
 		t.Fatalf("expected first duration to be %s, have %s", DefaultInterval, dur)
@@ -51,10 +48,10 @@ func TestTries(t *testing.T) {
 	b := NewWithoutJitter(5, 1)
 
 	for i := uint64(0); i < 3; i++ {
-		if b.tries != i {
-			t.Fatalf("want tries=%d, have tries=%d", i, b.tries)
-		} else if b.Tries() != i {
-			t.Fatalf("want tries=%d, have tries=%d", i, b.Tries())
+		if b.n != i {
+			t.Fatalf("want tries=%d, have tries=%d", i, b.n)
+		} else if b.n != i {
+			t.Fatalf("want tries=%d, have tries=%d", i, b.n)
 		}
 
 		pow := 1 << i
@@ -76,17 +73,81 @@ func TestTries(t *testing.T) {
 // Ensure that a call to Reset will actually reset the Backoff.
 func TestReset(t *testing.T) {
 	const iter = 10
-	b := New(10, 1)
+	b := New(1000, 1)
 	for i := 0; i < iter; i++ {
 		_ = b.Duration()
 	}
 
-	if b.tries != iter {
-		t.Fatalf("expected tries=%d, have tries=%d", iter, b.tries)
+	if b.n != iter {
+		t.Fatalf("expected tries=%d, have tries=%d", iter, b.n)
 	}
 
 	b.Reset()
-	if b.tries != 0 {
-		t.Fatalf("expected tries=0 after reset, have tries=%d", b.tries)
+	if b.n != 0 {
+		t.Fatalf("expected tries=0 after reset, have tries=%d", b.n)
 	}
+}
+
+const decay = 5 * time.Millisecond
+const max = 10 * time.Millisecond
+const interval = time.Millisecond
+
+func TestDecay(t *testing.T) {
+	const iter = 10
+
+	b := NewWithoutJitter(max, 1)
+	b.SetDecay(decay)
+
+	var backoff time.Duration
+	for i := 0; i < iter; i++ {
+		backoff = b.Duration()
+	}
+
+	if b.n != iter {
+		t.Fatalf("expected tries=%d, have tries=%d", iter, b.n)
+	}
+
+	// Don't decay below backoff
+	b.lastTry = time.Now().Add(-backoff + 1)
+	backoff = b.Duration()
+	if b.n != iter+1 {
+		t.Fatalf("expected tries=%d, have tries=%d", iter+1, b.n)
+	}
+
+	// Reset after backoff + decay
+	b.lastTry = time.Now().Add(-backoff - decay)
+	b.Duration()
+	if b.n != 1 {
+		t.Fatalf("expected tries=%d, have tries=%d", 1, b.n)
+	}
+}
+
+func ExampleBackoff_SetDecay() {
+	b := NewWithoutJitter(max, interval)
+	b.SetDecay(decay)
+
+	// try 0
+	fmt.Println(b.Duration())
+
+	// try 1
+	fmt.Println(b.Duration())
+
+	// try 2
+	duration := b.Duration()
+	fmt.Println(duration)
+
+	// try 3, below decay
+	time.Sleep(duration)
+	duration = b.Duration()
+	fmt.Println(duration)
+
+	// try 4, resets
+	time.Sleep(duration + decay)
+	fmt.Println(b.Duration())
+
+	// Output: 1ms
+	// 2ms
+	// 4ms
+	// 8ms
+	// 1ms
 }
