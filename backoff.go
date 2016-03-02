@@ -121,9 +121,9 @@ func (b *Backoff) Duration() time.Duration {
 
 	b.decayN()
 
-	t, overflow := b.duration(b.n)
+	t := b.duration(b.n)
 
-	if !overflow {
+	if b.n < math.MaxUint64 {
 		b.n++
 	}
 
@@ -135,7 +135,7 @@ func (b *Backoff) Duration() time.Duration {
 }
 
 // requires b to be locked.
-func (b *Backoff) duration(n uint64) (t time.Duration, overflow bool) {
+func (b *Backoff) duration(n uint64) (t time.Duration) {
 	// Saturate pow
 	pow := time.Duration(math.MaxInt64)
 	if n < 63 {
@@ -145,7 +145,6 @@ func (b *Backoff) duration(n uint64) (t time.Duration, overflow bool) {
 	t = b.interval * pow
 	if t/pow != b.interval || t > b.maxDuration {
 		t = b.maxDuration
-		overflow = true
 	}
 
 	return
@@ -188,7 +187,7 @@ func (b *Backoff) decayN() {
 		return
 	}
 
-	lastDuration, _ := b.duration(b.n - 1)
+	lastDuration := b.duration(b.n - 1)
 	decayed := time.Since(b.lastTry) > lastDuration+b.decay
 	b.lastTry = time.Now()
 

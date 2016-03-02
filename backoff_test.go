@@ -2,6 +2,7 @@ package backoff
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 )
@@ -119,6 +120,29 @@ func TestDecay(t *testing.T) {
 	b.Duration()
 	if b.n != 1 {
 		t.Fatalf("expected tries=%d, have tries=%d", 1, b.n)
+	}
+}
+
+// Ensure that decay works even if the retry counter is saturated.
+func TestDecaySaturation(t *testing.T) {
+	b := NewWithoutJitter(1<<2, 1)
+	b.SetDecay(decay)
+
+	var duration time.Duration
+	for i := 0; i <= 2; i++ {
+		duration = b.Duration()
+	}
+
+	if duration != 1<<2 {
+		t.Fatalf("expected duration=%v, have duration=%v", 1<<2, duration)
+	}
+
+	b.lastTry = time.Now().Add(-duration - decay)
+	b.n = math.MaxUint64
+
+	duration = b.Duration()
+	if duration != 1 {
+		t.Errorf("expected duration=%v, have duration=%v", 1, duration)
 	}
 }
 
