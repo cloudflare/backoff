@@ -21,7 +21,6 @@ import (
 	"io"
 	"math"
 	mrand "math/rand"
-	"sync"
 	"time"
 )
 
@@ -38,6 +37,9 @@ var DefaultMaxDuration = 6 * time.Hour
 // A Backoff contains the information needed to intelligently backoff
 // and retry operations using an exponential backoff algorithm. It should
 // be initialised with a call to `New`.
+//
+// Only use a Backoff from a single goroutine, it is not safe for concurrent
+// access.
 type Backoff struct {
 	// maxDuration is the largest possible duration that can be
 	// returned from a call to Duration.
@@ -59,7 +61,6 @@ type Backoff struct {
 
 	n       uint64
 	lastTry time.Time
-	lock    sync.Mutex // lock guards n
 }
 
 // New creates a new backoff with the specified max duration and
@@ -116,8 +117,6 @@ func (b *Backoff) setup() {
 // incrementing the attempt counter.
 func (b *Backoff) Duration() time.Duration {
 	b.setup()
-	b.lock.Lock()
-	defer b.lock.Unlock()
 
 	b.decayN()
 
@@ -154,9 +153,6 @@ func (b *Backoff) duration(n uint64) (t time.Duration) {
 //
 // It should be called when the rate-limited action succeeds.
 func (b *Backoff) Reset() {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
 	b.lastTry = time.Time{}
 	b.n = 0
 }
@@ -171,8 +167,6 @@ func (b *Backoff) SetDecay(decay time.Duration) {
 		panic("backoff: decay < 0")
 	}
 
-	b.lock.Lock()
-	defer b.lock.Unlock()
 	b.decay = decay
 }
 
