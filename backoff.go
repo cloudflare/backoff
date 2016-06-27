@@ -25,6 +25,7 @@ import (
 	"time"
 )
 
+var prngMu sync.Mutex
 var prng *mrand.Rand
 
 // DefaultInterval is used when a Backoff is initialised with a
@@ -128,7 +129,9 @@ func (b *Backoff) Duration() time.Duration {
 	}
 
 	if !b.noJitter {
+		prngMu.Lock()
 		t = time.Duration(prng.Int63n(int64(t)))
+		prngMu.Unlock()
 	}
 
 	return t
