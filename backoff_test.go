@@ -21,7 +21,7 @@ func TestDefaults(t *testing.T) {
 	}
 
 	if b.interval != DefaultInterval {
-		t.Fatalf("exepcted new backoff to use the default interval (%s), but have %s", DefaultInterval, b.interval)
+		t.Fatalf("expected new backoff to use the default interval (%s), but have %s", DefaultInterval, b.interval)
 	}
 
 	if b.noJitter != true {
@@ -44,7 +44,7 @@ func TestSetup(t *testing.T) {
 	}
 }
 
-// Ensure that tries incremenets as expected.
+// Ensure that tries increments as expected.
 func TestTries(t *testing.T) {
 	b := NewWithoutJitter(5, 1)
 
