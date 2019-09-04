@@ -195,3 +195,7 @@ func (b *Backoff) decayN() {
 
 	b.n = 0
 }
+
+func (b *Backoff) Tries() uint64 {
+	return b.n
+}
