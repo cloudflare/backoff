@@ -1,15 +1,15 @@
 sudo: false
 language: go
 go:
-  - 1.6
-  - 1.7
+  - 1.11.x
+  - 1.12.x
   - tip
 
 before_script:
   - go get github.com/GeertJohan/fgt
-  - go get github.com/golang/lint/golint
+  - go get golang.org/x/lint/golint
   - go get golang.org/x/tools/cmd/goimports
-  - go get honnef.co/go/staticcheck/cmd/staticcheck
+  - go get honnef.co/go/tools/cmd/staticcheck
 
 script:
   - find . -name \*.go | xargs fgt goimports -l
